@@ -1,0 +1,121 @@
+version: "3.8"
+services:
+  product-db:
+    image: postgres:latest
+    container_name: product_db_container
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1
+      POSTGRES_DB: productdb
+    volumes:
+      - product_data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+    networks:
+      - nestjs-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  order-db:
+    image: postgres:latest
+    container_name: order_db_container
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1
+      POSTGRES_DB: orderdb
+    volumes:
+      - order_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    networks:
+      - nestjs-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin_container
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    depends_on:
+      - product-db
+      - order-db
+    networks:
+      - nestjs-network
+
+  product-service-test:
+    build: ./product-service
+    command: npm run test
+    depends_on:
+      - product-db
+    networks:
+      - nestjs-network
+
+  order-service-test:
+    build: ./order-service
+    command: npm run test
+    depends_on:
+      - order-db
+    networks:
+      - nestjs-network
+
+  product-service:
+    build: ./product-service
+    ports:
+      - "3000:3000"
+      - "50051:50051"
+    environment:
+      POSTGRES_HOST: product-db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1
+      POSTGRES_DB: productdb
+    depends_on:
+      - product-db
+      - product-service-test # <-- Ensures the test runs before starting the service
+    networks:
+      - nestjs-network
+
+  order-service:
+    build: ./order-service
+    ports:
+      - "3001:3000"
+      - "50052:50052"
+    environment:
+      POSTGRES_HOST: order-db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1
+      POSTGRES_DB: orderdb
+    depends_on:
+      - order-db
+      - order-service-test # <-- Ensures the test runs before starting the service
+    networks:
+      - nestjs-network
+
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8081:8080"
+    networks:
+      - nestjs-network
+    depends_on:
+      - product-service
+      - order-service
+
+networks:
+  nestjs-network:
+    driver: bridge
+
+volumes:
+  product_data:
+  order_data:
